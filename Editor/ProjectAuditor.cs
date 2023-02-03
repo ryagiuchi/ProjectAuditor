@@ -50,7 +50,9 @@ namespace Unity.ProjectAuditor.Editor
 
         public ProjectAuditor()
         {
-            InitAsset(DefaultAssetPath);
+            string guid = AssetDatabase.FindAssets($"t:{typeof(ProjectAuditorConfig).ToString()}").FirstOrDefault();
+            string assetPath = string.IsNullOrEmpty(guid) ? DefaultAssetPath : AssetDatabase.GUIDToAssetPath(guid);
+            InitAsset(assetPath);
             InitModules();
             InitDefaultSettingsProvider();
         }
