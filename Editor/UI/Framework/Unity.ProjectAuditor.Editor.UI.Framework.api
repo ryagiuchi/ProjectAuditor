@@ -6,7 +6,7 @@ namespace Unity.ProjectAuditor.Editor
     public class TextFilter : IProjectIssueFilter
     {
         public bool ignoreCase = true;
-        public bool searchDependencies;
+        public bool searchDependencies = false;
         public string searchString;
         public TextFilter(Core.PropertyDefinition[] propertyDefinitions = default(Core.PropertyDefinition[])) {}
         public bool Match(ProjectIssue issue);
@@ -71,6 +71,18 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
             public static readonly int FoldoutWidth = 260;
             public static readonly int ToolbarButtonSize = 80;
             public static readonly int ToolbarIconSize = 32;
+        }
+    }
+
+    public static class ChartUtil
+    {
+        public static void DrawHorizontalStackedBar(string title, ChartUtil.Element[] inValues, string labelFormat = @"{0}", string numberFormat = @"#");
+        public struct Element
+        {
+            public UnityEngine.Color Color;
+            public string Label;
+            public float Value;
+            public Element(string label, float value, UnityEngine.Color color) {}
         }
     }
 
@@ -277,10 +289,10 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
         public IssueCategory category;
         public UnityEngine.GUIContent dependencyViewGuiContent;
         public bool descriptionWithIcon;
+        public string displayName;
         public System.Func<ProjectIssue, string> getAssemblyName;
         public string menuLabel;
         public int menuOrder;
-        public string name;
         public System.Action<UnityEditor.GenericMenu, ViewManager, ProjectIssue> onContextMenu;
         public System.Action<ViewManager> onDrawToolbar;
         public System.Action<Location> onOpenIssue;

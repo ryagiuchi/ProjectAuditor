@@ -18,12 +18,12 @@ namespace Unity.ProjectAuditor.EditorTests
         }
 
         [Test]
-        public void Formatting_Time_IsFormatted()
+        public void Formatting_Duration_IsFormatted()
         {
             var time = new TimeSpan(10, 24, 30);
             const string formatted = "10:24:30";
 
-            Assert.AreEqual(formatted, Formatting.FormatBuildTime(time));
+            Assert.AreEqual(formatted, Formatting.FormatDuration(time));
         }
 
         [Test]
@@ -39,6 +39,15 @@ namespace Unity.ProjectAuditor.EditorTests
             const string formatted = "6.12 s"; // truncated to 2 decimals
 
             Assert.AreEqual(formatted, Formatting.FormatTime(time));
+        }
+
+        [TestCase(0.12345f, "12.3 %")]
+        [TestCase(0.5f, "50.0 %")]
+        [TestCase(0.0f, "0.0 %")]
+        [TestCase(1.0f, "100.0 %")]
+        public void Formatting_Percentage_IsFormatted(float number, string expectedResult)
+        {
+            Assert.AreEqual(expectedResult, Formatting.FormatPercentage(number));
         }
     }
 }

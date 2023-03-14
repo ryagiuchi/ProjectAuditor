@@ -1,11 +1,10 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using Unity.ProjectAuditor.Editor;
 using Unity.ProjectAuditor.Editor.Diagnostic;
 using Unity.ProjectAuditor.Editor.Modules;
+using Unity.ProjectAuditor.Editor.Tests.Common;
 using Unity.ProjectAuditor.Editor.Utils;
 using UnityEditor;
 using UnityEditor.Build;
@@ -20,14 +19,17 @@ namespace Unity.ProjectAuditor.EditorTests
         const string k_ShaderName = "Custom/MyTestShader,1"; // comma in the name for testing purposes
 
 #pragma warning disable 0414
-        TempAsset m_ShaderResource;
-        TempAsset m_PlayerLogResource;
-        TempAsset m_PlayerLogWithNoCompilationResource;
-        TempAsset m_ShaderWithErrorResource;
-        TempAsset m_EditorShaderResource;
+        TestAsset m_ShaderResource;
+        TestAsset m_PlayerLogResource;
+        TestAsset m_PlayerLogWithNoCompilationResource;
+        TestAsset m_ShaderWithErrorResource;
+        TestAsset m_EditorShaderResource;
 
-        TempAsset m_ShaderUsingBuiltInKeywordResource;
-        TempAsset m_SurfShaderResource;
+        TestAsset m_ShaderUsingBuiltInKeywordResource;
+        TestAsset m_SurfShaderResource;
+
+        TestAsset m_SrpBatchNonCompatibleShaderResource;
+        TestAsset m_SrpBatchCompatibleShaderResource;
 #pragma warning restore 0414
 
         const string s_KeywordName = "DIRECTIONAL";
@@ -67,7 +69,7 @@ namespace Unity.ProjectAuditor.EditorTests
         [OneTimeSetUp]
         public void SetUp()
         {
-            m_ShaderResource = new TempAsset("Resources/MyTestShader.shader", @"
+            m_ShaderResource = new TestAsset("Resources/MyTestShader.shader", @"
             Shader ""Custom/MyTestShader,1""
             {
                 SubShader
@@ -150,7 +152,7 @@ namespace Unity.ProjectAuditor.EditorTests
                 }
             }");
 
-            m_PlayerLogResource = new TempAsset("player.log", @"
+            m_PlayerLogResource = new TestAsset("player.log", @"
 02-10 17:36:20.945  6554  6816 D Unity   : Compiled shader: Custom/MyTestShader,1, pass: MyTestShader/Pass, stage: vertex, keywords <no keywords>
 02-10 17:36:20.945  6554  6816 D Unity   : Compiled shader: Custom/MyTestShader,1, pass: MyTestShader/Pass, stage: fragment, keywords <no keywords>
 02-10 17:36:20.945  6554  6816 D Unity   : Compiled shader: Custom/MyTestShader,1, pass: MyTestShader/Pass, stage: vertex, keywords KEYWORD_A
@@ -161,20 +163,20 @@ namespace Unity.ProjectAuditor.EditorTests
             ");
 
 
-            m_PlayerLogWithNoCompilationResource = new TempAsset("player_with_no_compilation.log", string.Empty);
+            m_PlayerLogWithNoCompilationResource = new TestAsset("player_with_no_compilation.log", string.Empty);
 
 #if UNITY_2021_1_OR_NEWER
             UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true; // workaround for 2021.x failure
 #endif
 
 #if UNITY_2019_1_OR_NEWER
-            m_ShaderWithErrorResource = new TempAsset("Resources/ShaderWithError.shader", @"
+            m_ShaderWithErrorResource = new TestAsset("Resources/ShaderWithError.shader", @"
             Sader ""Custom/ShaderWithError""
             {
             }");
 #endif
 
-            m_ShaderUsingBuiltInKeywordResource = new TempAsset("Resources/ShaderUsingBuiltInKeyword.shader", @"
+            m_ShaderUsingBuiltInKeywordResource = new TestAsset("Resources/ShaderUsingBuiltInKeyword.shader", @"
 Shader ""Custom/ShaderUsingBuiltInKeyword""
             {
                 Properties
@@ -228,7 +230,7 @@ Shader ""Custom/ShaderUsingBuiltInKeyword""
             }
             ");
 
-            m_SurfShaderResource = new TempAsset("Resources/MySurfShader.shader", @"
+            m_SurfShaderResource = new TestAsset("Resources/MySurfShader.shader", @"
 Shader ""Custom/MySurfShader""
             {
                 Properties
@@ -274,7 +276,7 @@ Shader ""Custom/MySurfShader""
             }
 ");
 
-            m_EditorShaderResource = new TempAsset("Editor/MyEditorShader.shader", @"
+            m_EditorShaderResource = new TestAsset("Editor/MyEditorShader.shader", @"
 Shader ""Custom/MyEditorShader""
             {
                 Properties
@@ -317,6 +319,85 @@ Shader ""Custom/MyEditorShader""
                     ENDCG
                 }
                 FallBack ""Diffuse""
+            }
+");
+
+            m_SrpBatchNonCompatibleShaderResource = new TestAsset("Resources/SRPBatchNonCompatible.shader", @"
+Shader ""Custom/SRPBatchNonCompatible""
+            {
+                Properties
+                {
+                    _Color1 (""Color 1"", Color) = (1,1,1,1)
+                }
+                SubShader
+                {
+                    Tags { ""RenderType"" = ""Opaque"" ""RenderPipeline"" = ""UniversalRenderPipeline"" }
+                    Pass
+                    {
+                        HLSLPROGRAM
+                        #pragma vertex vert
+                        #pragma fragment frag
+                        float4 _Color1;
+                        struct Attributes
+                        {
+                            float4 positionOS   : POSITION;
+                        };
+                        struct Varyings
+                        {
+                            float4 positionHCS  : SV_POSITION;
+                        };
+                        Varyings vert(Attributes IN)
+                        {
+                            Varyings OUT;
+                            OUT.positionHCS = IN.positionOS.xxyz;
+                            return OUT;
+                        }
+                        half4 frag() : SV_Target
+                        {
+                            return _Color1;
+                        }
+                        ENDHLSL
+                    }
+                }
+            }
+");
+
+            m_SrpBatchCompatibleShaderResource = new TestAsset("Resources/SRPBatchCompatible.shader", @"
+Shader ""Custom/SRPBatchCompatible""
+            {
+                Properties
+                {
+                    _Color1 (""Color 1"", Color) = (1,1,1,1)
+                }
+                SubShader
+                {
+                    Tags { ""RenderType"" = ""Opaque"" ""RenderPipeline"" = ""UniversalRenderPipeline"" }
+                    Pass
+                    {
+                        HLSLPROGRAM
+                        #pragma vertex vert
+                        #pragma fragment frag
+                        struct Attributes
+                        {
+                            float4 positionOS   : POSITION;
+                        };
+                        struct Varyings
+                        {
+                            float4 positionHCS  : SV_POSITION;
+                        };
+                        Varyings vert(Attributes IN)
+                        {
+                            Varyings OUT;
+                            OUT.positionHCS = IN.positionOS.xxyz;
+                            return OUT;
+                        }
+                        half4 frag() : SV_Target
+                        {
+                            return half4(1, 1, 1, 1);
+                        }
+                        ENDHLSL
+                    }
+                }
             }
 ");
         }
@@ -660,6 +741,41 @@ Shader ""Custom/MyEditorShader""
             var issues = Analyze(IssueCategory.Shader, i => i.relativePath.Contains("Editor Default Resources"));
 
             Assert.Zero(issues.Length);
+        }
+
+        [Test]
+#if !UNITY_2019_3_OR_NEWER
+        [Ignore("This requires the new Shader API")]
+#endif
+        public void ShadersAnalysis_SRPNonCompatibleShader_IsReported()
+        {
+            if (!ShaderAnalyzer.IsSrpBatchingEnabled)
+            {
+                return;
+            }
+
+            var issues = AnalyzeAndFindAssetIssues(m_SrpBatchNonCompatibleShaderResource, IssueCategory.AssetDiagnostic);
+
+            Assert.IsNotEmpty(issues);
+            Assert.IsTrue(issues.Any(issue => issue.descriptor.id == ShaderAnalyzer.PAS0000),
+                "The not compatible with SRP batcher shader should be reported.");
+        }
+
+        [Test]
+#if !UNITY_2019_3_OR_NEWER
+        [Ignore("This requires the new Shader API")]
+#endif
+        public void ShadersAnalysis_SRPCompatibleShader_IsNotReported()
+        {
+            if (!ShaderAnalyzer.IsSrpBatchingEnabled)
+            {
+                return;
+            }
+
+            var issues = AnalyzeAndFindAssetIssues(m_SrpBatchCompatibleShaderResource, IssueCategory.AssetDiagnostic);
+
+            Assert.IsFalse(issues.Any(issue => issue.descriptor.id == ShaderAnalyzer.PAS0000),
+                "The compatible with SRP batcher shader should not be reported.");
         }
     }
 }

@@ -24,6 +24,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
         ImporterType = 0,
         RuntimeType,
         Size,
+        SizePercent,
         BuildFile,
         Num
     }
@@ -35,7 +36,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
         Num
     }
 
-    public class BuildReportModule : ProjectAuditorModule
+    class BuildReportModule : ProjectAuditorModule
     {
         internal interface IBuildReportProvider
         {
@@ -73,6 +74,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
                 new PropertyDefinition { type = PropertyTypeUtil.FromCustom(BuildReportFileProperty.ImporterType), format = PropertyFormat.String, name = "Importer Type"},
                 new PropertyDefinition { type = PropertyTypeUtil.FromCustom(BuildReportFileProperty.RuntimeType), format = PropertyFormat.String, name = "Runtime Type", defaultGroup = true},
                 new PropertyDefinition { type = PropertyTypeUtil.FromCustom(BuildReportFileProperty.Size), format = PropertyFormat.Bytes, name = "Size", longName = "Size in the Build"},
+                new PropertyDefinition { type = PropertyTypeUtil.FromCustom(BuildReportFileProperty.SizePercent), format = PropertyFormat.Percentage, name = "Size % (of Data)", longName = "Percentage of the total data size"},
                 new PropertyDefinition { type = PropertyType.Path, name = "Path", hidden = true},
                 new PropertyDefinition { type = PropertyTypeUtil.FromCustom(BuildReportFileProperty.BuildFile), format = PropertyFormat.String, name = "Build File"}
             }
@@ -127,7 +129,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
                     NewMetaData(k_KeyResult, buildReport.summary.result),
                     NewMetaData(k_KeyStartTime, Formatting.FormatDateTime(buildReport.summary.buildStartedAt)),
                     NewMetaData(k_KeyEndTime, Formatting.FormatDateTime(buildReport.summary.buildEndedAt)),
-                    NewMetaData(k_KeyTotalTime, Formatting.FormatBuildTime(buildReport.summary.totalTime)),
+                    NewMetaData(k_KeyTotalTime, Formatting.FormatDuration(buildReport.summary.totalTime)),
                     NewMetaData(k_KeyTotalSize, Formatting.FormatSize(buildReport.summary.totalSize)),
                 });
                 projectAuditorParams.onIncomingIssues(AnalyzeBuildSteps(buildReport));
@@ -146,7 +148,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
                 yield return ProjectIssue.Create(IssueCategory.BuildStep, step.name)
                     .WithCustomProperties(new object[(int)BuildReportStepProperty.Num]
                     {
-                        Formatting.FormatBuildTime(step.duration),
+                        Formatting.FormatDuration(step.duration),
                         step.name
                     })
                     .WithDepth(depth)
@@ -170,6 +172,8 @@ namespace Unity.ProjectAuditor.Editor.Modules
 
         IEnumerable<ProjectIssue> AnalyzePackedAssets(BuildReport buildReport)
         {
+            var dataSize = buildReport.packedAssets.SelectMany(p => p.contents).Sum(c => (long)c.packedSize);
+
             foreach (var packedAsset in buildReport.packedAssets)
             {
                 // note that there can be several entries for each source asset (for example, a prefab can reference a Texture, a Material and a shader)
@@ -187,6 +191,7 @@ namespace Unity.ProjectAuditor.Editor.Modules
                             assetImporter != null ? assetImporter.GetType().FullName : k_Unknown,
                             content.type,
                             content.packedSize,
+                            Math.Round((double)content.packedSize / dataSize, 4),
                             packedAsset.shortPath
                         });
                 }

@@ -87,7 +87,8 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                 itemsList.AddRange(m_TreeViewItemIssues);
             foreach (var issue in issues)
             {
-                var item = new IssueTableItem(m_NextId++, issue.depth, issue.description, issue, issue.GetPropertyGroup(m_Layout.properties[m_GroupPropertyIndex]));
+                var depth = m_Layout.hierarchy ? issue.depth : 1;
+                var item = new IssueTableItem(m_NextId++, depth, issue.description, issue, issue.GetPropertyGroup(m_Layout.properties[m_GroupPropertyIndex]));
                 itemsList.Add(item);
             }
 
@@ -231,11 +232,9 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                 cellRect.xMin += indent;
                 CenterRectUsingSingleLineHeight(ref cellRect);
             }
-            else if (property.type == PropertyType.Description)
+            else if (m_Layout.hierarchy && property.type == PropertyType.Description)
             {
                 var indent = GetContentIndent(treeViewItem);
-                if (m_Layout.hierarchy)
-                    indent -= foldoutWidth; // foldout is not drawn, so we need to compensate for it
                 cellRect.xMin += indent;
                 CenterRectUsingSingleLineHeight(ref cellRect);
             }
@@ -251,7 +250,7 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                 else if (PropertyTypeUtil.IsCustom(property.type))
                 {
                     var customPropertyIndex = PropertyTypeUtil.ToCustomIndex(propertyType);
-                    if (property.format == PropertyFormat.Bytes || property.format == PropertyFormat.Time)
+                    if (property.format == PropertyFormat.Bytes || property.format == PropertyFormat.Time || property.format == PropertyFormat.Percentage)
                     {
                         string label;
                         if (property.format == PropertyFormat.Bytes)
@@ -275,7 +274,7 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                                 var value = issueTableItem.ProjectIssue.GetCustomPropertyFloat(customPropertyIndex);
                                 sum += value;
                             }
-                            label = Formatting.FormatTime(sum);
+                            label = property.format == PropertyFormat.Time ? Formatting.FormatTime(sum) : Formatting.FormatPercentage(sum);
                         }
 
                         GUI.enabled = false;
@@ -362,6 +361,14 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                                 case PropertyFormat.Time:
                                     EditorGUI.LabelField(cellRect, Formatting.FormatTime(issue.GetCustomPropertyFloat(customPropertyIndex)), labelStyle);
                                     break;
+                                case PropertyFormat.ULong:
+                                    var ulongAsString = issue.GetCustomProperty(customPropertyIndex);
+                                    var ulongValue = (ulong)0;
+                                    if (!ulong.TryParse(ulongAsString, out ulongValue))
+                                        EditorGUI.LabelField(cellRect, Utility.GetIcon(Utility.IconType.Info, ulongAsString), labelStyle);
+                                    else
+                                        EditorGUI.LabelField(cellRect, new GUIContent(ulongAsString, ulongAsString), labelStyle);
+                                    break;
                                 case PropertyFormat.Integer:
                                     var intAsString = issue.GetCustomProperty(customPropertyIndex);
                                     var intValue = 0;
@@ -369,6 +376,9 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                                         EditorGUI.LabelField(cellRect, Utility.GetIcon(Utility.IconType.Info, intAsString), labelStyle);
                                     else
                                         EditorGUI.LabelField(cellRect, new GUIContent(intAsString, intAsString), labelStyle);
+                                    break;
+                                case PropertyFormat.Percentage:
+                                    EditorGUI.LabelField(cellRect, Formatting.FormatPercentage(issue.GetCustomPropertyFloat(customPropertyIndex)), labelStyle);
                                     break;
                                 default:
                                     var value = issue.GetCustomProperty(customPropertyIndex);
@@ -389,7 +399,7 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                     GUI.enabled = true;
             }
 
-            ShowContextMenu(cellRect, item);
+            ShowContextMenu(cellRect, item, propertyType);
         }
 
         new void CenterRectUsingSingleLineHeight(ref Rect rect)
@@ -460,7 +470,7 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
             SortIfNeeded(GetRows());
         }
 
-        void ShowContextMenu(Rect cellRect, IssueTableItem item)
+        void ShowContextMenu(Rect cellRect, IssueTableItem item, PropertyType propertyType)
         {
             var current = Event.current;
             if (cellRect.Contains(current.mousePosition) && current.type == EventType.ContextClick)
@@ -508,7 +518,11 @@ namespace Unity.ProjectAuditor.Editor.UI.Framework
                 }
 
                 menu.AddSeparator("");
-                menu.AddItem(Utility.CopyToClipboard, false, () => CopyToClipboard(item.GetDisplayName()));
+                menu.AddItem(Utility.CopyToClipboard, false, () =>
+                {
+                    CopyToClipboard(
+                        item.IsGroup() ? item.GetDisplayName() : item.ProjectIssue.GetProperty(propertyType));
+                });
 
                 menu.ShowAsContext();
 

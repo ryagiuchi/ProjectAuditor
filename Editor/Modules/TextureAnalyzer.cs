@@ -2,18 +2,19 @@ using System.Collections.Generic;
 using System.IO;
 using Unity.ProjectAuditor.Editor.Core;
 using Unity.ProjectAuditor.Editor.Diagnostic;
-using Unity.ProjectAuditor.Editor.Modules;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Profiling;
 
 namespace Unity.ProjectAuditor.Editor.Modules
 {
-    public class TextureAnalyzer : ITextureModuleAnalyzer
+    class TextureAnalyzer : ITextureModuleAnalyzer
     {
         internal const string PAT0000 = nameof(PAT0000);
         internal const string PAT0001 = nameof(PAT0001);
         internal const string PAT0002 = nameof(PAT0002);
+        internal const string PAT0003 = nameof(PAT0003);
+        internal const string PAT0004 = nameof(PAT0004);
 
         internal static readonly Descriptor k_TextureMipMapNotEnabledDescriptor = new Descriptor(
             PAT0000,
@@ -59,9 +60,8 @@ namespace Unity.ProjectAuditor.Editor.Modules
             PAT0002,
             "Texture: Read/Write enabled",
             Area.Memory,
-            "Mesh Read/Write flag is enabled. This causes the texture data to be duplicated in memory." +
-            "Thus, this option should only be used if the texture is read or written to at run-time." +
-            "Consider disabling Read/Write using the <b>Read/Write Enabled</b> option in the texture inspector."
+            "Mesh Read/Write flag is enabled. This causes the texture data to be duplicated in memory.",
+            "If not required, consider disabling the <b>Read/Write Enabled</b> option in the texture inspector."
         )
         {
             messageFormat = "Texture '{0}' Read/Write is enabled",
@@ -77,11 +77,53 @@ namespace Unity.ProjectAuditor.Editor.Modules
             }
         };
 
+        internal static readonly Descriptor k_TextureStreamingMipMapEnabledDescriptor = new Descriptor(
+            PAT0003,
+            "Texture: Mipmaps Streaming not enabled",
+            new[] {Area.Memory, Area.Quality},
+            "Texture mipmaps streaming is not enabled. This increases the amount of mipmap textures that are loaded into memory on the GPU.",
+            "Consider enabled mipmaps streaming using the <b>Streaming Mipmaps</b> option in the texture inspector."
+        )
+        {
+            messageFormat = "Texture '{0}' mipmaps streaming is not enabled",
+            fixer = (issue) =>
+            {
+                var textureImporter = AssetImporter.GetAtPath(issue.relativePath) as TextureImporter;
+                if (textureImporter != null)
+                {
+                    textureImporter.streamingMipmaps = true;
+                    textureImporter.SaveAndReimport();
+                }
+            }
+        };
+
+        internal static readonly Descriptor k_TextureAnisotropicLevelDescriptor = new Descriptor(
+            PAT0004,
+            "Texture: Anisotropic level is higher than 1",
+            new[] {Area.GPU, Area.Quality},
+            "The anisotropic level is higher than 1. Anisotropic filtering makes textures look better when viewed at a shallow angle, but it can be slower to process on the GPU.",
+            "Consider setting the anisotropic level to 1."
+        )
+        {
+            messageFormat = "Texture '{0}' has an anisotropic level higher than 1.",
+            fixer = (issue) =>
+            {
+                var textureImporter = AssetImporter.GetAtPath(issue.relativePath) as TextureImporter;
+                if (textureImporter != null)
+                {
+                    textureImporter.anisoLevel = 1;
+                    textureImporter.SaveAndReimport();
+                }
+            }
+        };
+
         public void Initialize(ProjectAuditorModule module)
         {
             module.RegisterDescriptor(k_TextureMipMapNotEnabledDescriptor);
             module.RegisterDescriptor(k_TextureMipMapEnabledDescriptor);
             module.RegisterDescriptor(k_TextureReadWriteEnabledDescriptor);
+            module.RegisterDescriptor(k_TextureStreamingMipMapEnabledDescriptor);
+            module.RegisterDescriptor(k_TextureAnisotropicLevelDescriptor);
         }
 
         public IEnumerable<ProjectIssue> Analyze(ProjectAuditorParams projectAuditorParams, TextureImporter textureImporter, TextureImporterPlatformSettings platformSettings)
@@ -104,7 +146,8 @@ namespace Unity.ProjectAuditor.Editor.Modules
                         textureImporter.mipmapEnabled,
                         textureImporter.isReadable,
                         resolution,
-                        size
+                        size,
+                        textureImporter.streamingMipmaps
                     })
                 .WithLocation(new Location(assetPath));
 
@@ -130,6 +173,18 @@ namespace Unity.ProjectAuditor.Editor.Modules
             if (textureImporter.isReadable)
             {
                 yield return ProjectIssue.Create(IssueCategory.AssetDiagnostic, k_TextureReadWriteEnabledDescriptor, textureName)
+                    .WithLocation(textureImporter.assetPath);
+            }
+
+            if (!textureImporter.streamingMipmaps && size > Mathf.Pow(projectAuditorParams.settings.TextureStreamingMipmapsSizeLimit, 2))
+            {
+                yield return ProjectIssue.Create(IssueCategory.AssetDiagnostic, k_TextureStreamingMipMapEnabledDescriptor, textureName)
+                    .WithLocation(textureImporter.assetPath);
+            }
+
+            if (textureImporter.mipmapEnabled && textureImporter.filterMode != FilterMode.Point && textureImporter.anisoLevel > 1)
+            {
+                yield return ProjectIssue.Create(IssueCategory.AssetDiagnostic, k_TextureAnisotropicLevelDescriptor, textureName)
                     .WithLocation(textureImporter.assetPath);
             }
         }

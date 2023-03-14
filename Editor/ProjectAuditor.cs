@@ -21,25 +21,45 @@ namespace Unity.ProjectAuditor.Editor
     public sealed class ProjectAuditor
         : IPreprocessBuildWithReport
     {
-        static readonly Dictionary<string, IssueCategory> s_CustomCategories = new Dictionary<string, IssueCategory>();
+        internal static string DataPath => PackagePath + "/Data";
+        internal const string k_DefaultAssetPath = "Assets/Editor/ProjectAuditorConfig.asset";
+        internal const string k_CanonicalPackagePath = "Packages/" + PackageName;
 
-        internal const string DataPath = PackagePath + "/Data";
-        internal const string DefaultAssetPath = "Assets/Editor/ProjectAuditorConfig.asset";
 
         public const string PackageName = "com.unity.project-auditor";
-        public const string PackagePath = "Packages/" + PackageName;
+
+        public static string PackagePath
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(s_PackagePath))
+                    return s_PackagePath;
+
+                if (PackageUtils.IsPackageInstalled(PackageName))
+                    s_PackagePath = k_CanonicalPackagePath;
+                else
+                {
+                    var paths = AssetDatabase.FindAssets("t:asmdef", new string[] { "Packages" }).Select(AssetDatabase.GUIDToAssetPath);
+                    var asmDefPath = paths.FirstOrDefault(path => path.EndsWith("Unity.ProjectAuditor.Editor.asmdef"));
+                    s_PackagePath = PathUtils.GetDirectoryName(PathUtils.GetDirectoryName(asmDefPath));
+                }
+                return s_PackagePath;
+            }
+        }
 
         internal static string PackageVersion
         {
             get
             {
-                if (string.IsNullOrEmpty(m_PackageVersion))
-                    m_PackageVersion = PackageUtils.GetPackageVersion(PackageName);
-                return m_PackageVersion;
+                if (string.IsNullOrEmpty(s_PackageVersion))
+                    s_PackageVersion = PackageUtils.GetPackageVersion(PackageName);
+                return s_PackageVersion;
             }
         }
 
-        static string m_PackageVersion;
+        static readonly Dictionary<string, IssueCategory> s_CustomCategories = new Dictionary<string, IssueCategory>();
+        static string s_PackagePath;
+        static string s_PackageVersion;
 
         readonly List<ProjectAuditorModule> m_Modules = new List<ProjectAuditorModule>();
         ProjectAuditorConfig m_Config;
@@ -51,7 +71,7 @@ namespace Unity.ProjectAuditor.Editor
         public ProjectAuditor()
         {
             string guid = AssetDatabase.FindAssets($"t:{typeof(ProjectAuditorConfig).ToString()}").FirstOrDefault();
-            string assetPath = string.IsNullOrEmpty(guid) ? DefaultAssetPath : AssetDatabase.GUIDToAssetPath(guid);
+            string assetPath = string.IsNullOrEmpty(guid) ? k_DefaultAssetPath : AssetDatabase.GUIDToAssetPath(guid);
             InitAsset(assetPath);
             InitModules();
             InitDefaultSettingsProvider();
@@ -222,6 +242,11 @@ namespace Unity.ProjectAuditor.Editor
             }
 
             return null;
+        }
+
+        internal Descriptor[] GetDescriptors()
+        {
+            return m_Modules.SelectMany(m => m.supportedDescriptors).ToArray();
         }
 
         internal ProjectAuditorModule[] GetModules(IssueCategory category)

@@ -2,6 +2,7 @@ using System;
 using NUnit.Framework;
 using Unity.ProjectAuditor.Editor;
 using Unity.ProjectAuditor.Editor.AssemblyUtils;
+using Unity.ProjectAuditor.Editor.Tests.Common;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,11 +19,10 @@ namespace Unity.ProjectAuditor.EditorTests
         [Test]
         public void ProjectAuditor_Module_IsSupported()
         {
-            var projectAuditor = new Unity.ProjectAuditor.Editor.ProjectAuditor();
 #if BUILD_REPORT_API_SUPPORT
-            Assert.True(projectAuditor.IsModuleSupported(IssueCategory.BuildFile));
+            Assert.True(m_ProjectAuditor.IsModuleSupported(IssueCategory.BuildFile));
 #else
-            Assert.False(projectAuditor.IsModuleSupported(IssueCategory.BuildFile));
+            Assert.False(m_ProjectAuditor.IsModuleSupported(IssueCategory.BuildFile));
 #endif
         }
 
